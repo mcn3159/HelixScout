@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A focused computational biology opportunity radar.">
+  <title>BigMoveFinder</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 1v3M12 20v3M1 12h3M20 12h3M12 12l6-6"></path></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2z"></path><path d="M19 17l.7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7L19 17z"></path></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M14 3v6M4 18h2M10 18h10M10 15v6M4 12h5M13 12h7M9 9v6"></path></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M16 16l5 5"></path></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4V3z"></path></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 13v6H5V6h6"></path></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"></path></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3M7 8l5-5 5 5"></path><path d="M4 14v6h16v-6"></path></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13M7 11l5 5 5-5"></path><path d="M4 18v3h16v-3"></path></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"></path></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"></path></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5"></path><path d="M19 11a7 7 0 1 0 .2 5"></path></symbol>
+  </svg>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><span></span><span></span><span></span></div>
+        <div><strong>Helix</strong><small>SCOUT</small></div>
+      </div>
+
+      <nav class="nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="all"><svg><use href="#i-radar"></use></svg><span>Opportunity radar</span></button>
+        <button class="nav-item" data-view="saved"><svg><use href="#i-bookmark"></use></svg><span>Saved</span><em id="savedNavCount">0</em></button>
+        <button class="nav-item" id="navPreferences"><svg><use href="#i-sliders"></use></svg><span>Preferences</span></button>
+      </nav>
+
+      <div class="side-section">
+        <p class="side-label">Watching</p>
+        <div class="watch-list">
+          <span><i class="topic-dot coral"></i>Microbial genomics</span>
+          <span><i class="topic-dot mint"></i>Protein language models</span>
+          <span><i class="topic-dot gold"></i>Metagenomics</span>
+          <span><i class="topic-dot blue"></i>Protein structure</span>
+          <span><i class="topic-dot plum"></i>Foundation models</span>
+        </div>
+      </div>
+
+      <div class="source-monitor">
+        <div class="source-heading"><p class="side-label">Sources</p><span id="sourceCount">0/3</span></div>
+        <div id="sourceList"></div>
+      </div>
+
+      <div class="side-footer">
+        <span class="pulse-dot"></span>
+        <div><strong>Local & private</strong><small>Your preferences stay on this machine.</small></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" aria-label="Open menu"><span></span><span></span><span></span></button>
+        <div class="search-box">
+          <svg><use href="#i-search"></use></svg>
+          <input id="searchInput" type="search" placeholder="Search roles, topics, organizations…" autocomplete="off">
+          <kbd>/</kbd>
+        </div>
+        <button class="icon-btn" id="quickPreferences" aria-label="Open preferences"><svg><use href="#i-sliders"></use></svg></button>
+        <button class="scan-button" id="scanButton"><svg><use href="#i-refresh"></use></svg><span>Run scan</span></button>
+      </header>
+
+      <div class="content">
+        <section class="hero">
+          <div>
+            <p class="eyebrow"><span></span>Computational biology · New York City</p>
+            <h1>Your opportunity<br><em>signal, clarified.</em></h1>
+            <p class="hero-copy">Roles, fellowships, and events gathered from the places scientists actually post—then ranked around what matters to you.</p>
+          </div>
+          <div class="scan-orbit" aria-hidden="true">
+            <div class="orbit orbit-1"><span></span></div>
+            <div class="orbit orbit-2"><span></span></div>
+            <div class="orbit-center"><svg><use href="#i-spark"></use></svg></div>
+          </div>
+        </section>
+
+        <section id="demoNotice" class="demo-notice hidden">
+          <div><strong>Preview data</strong><span>These fictional examples show how the dashboard works. Run a scan to collect live public results.</span></div>
+          <button id="hideDemos">Hide examples</button>
+        </section>
+
+        <section class="metrics" aria-label="Opportunity summary">
+          <article><span class="metric-icon coral-bg"><svg><use href="#i-spark"></use></svg></span><div><strong id="newMetric">0</strong><small>New signals</small></div><em id="newContext">in your radar</em></article>
+          <article><span class="metric-icon mint-bg"><svg><use href="#i-radar"></use></svg></span><div><strong id="matchMetric">0</strong><small>Strong matches</small></div><em>score 60+</em></article>
+          <article><span class="metric-icon gold-bg"><svg><use href="#i-bookmark"></use></svg></span><div><strong id="eventMetric">0</strong><small>Events found</small></div><em>seminars + more</em></article>
+          <article><span class="metric-icon blue-bg"><svg><use href="#i-check"></use></svg></span><div><strong id="savedMetric">0</strong><small>Saved</small></div><em>your shortlist</em></article>
+        </section>
+
+        <section class="results-section">
+          <div class="section-heading">
+            <div><p class="eyebrow compact">Curated feed</p><h2>Ranked for you</h2></div>
+            <p id="resultSummary">Loading signals…</p>
+          </div>
+
+          <div class="filter-row">
+            <div class="tabs" role="tablist">
+              <button class="active" data-kind="all">All</button>
+              <button data-kind="role">Roles</button>
+              <button data-kind="fellowship">Fellowships</button>
+              <button data-kind="event">Events</button>
+            </div>
+            <div class="select-wrap">
+              <label for="sourceFilter">Source</label>
+              <select id="sourceFilter"><option value="all">All sources</option><option value="linkedin">LinkedIn</option><option value="x">X / Twitter</option><option value="bluesky">Bluesky</option><option value="import">Imported</option></select>
+              <svg><use href="#i-chevron"></use></svg>
+            </div>
+            <div class="select-wrap">
+              <label for="sortFilter">Sort</label>
+              <select id="sortFilter"><option value="score">Best match</option><option value="newest">Newest first</option></select>
+              <svg><use href="#i-chevron"></use></svg>
+            </div>
+          </div>
+
+          <div id="cards" class="cards" aria-live="polite"></div>
+          <div id="emptyState" class="empty-state hidden">
+            <div class="empty-orbit"><svg><use href="#i-search"></use></svg></div>
+            <h3>No signals in this slice</h3>
+            <p>Try another filter, lower your minimum score, or run a fresh scan.</p>
+            <button id="emptyReset">Reset filters</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+  <aside class="drawer" id="preferenceDrawer" aria-labelledby="drawerTitle" aria-hidden="true">
+    <div class="drawer-header"><div><p class="eyebrow compact">Tune your signal</p><h2 id="drawerTitle">Preferences</h2></div><button class="icon-btn" id="closeDrawer" aria-label="Close"><svg><use href="#i-x"></use></svg></button></div>
+    <div class="drawer-body">
+      <section class="preference-intro"><span><svg><use href="#i-spark"></use></svg></span><div><strong>Your interests are built in</strong><p>NYC, computational biology, genomics, protein models, industry roles, fellowships, and scientific events all increase a match.</p></div></section>
+
+      <section class="penalty-builder">
+        <div class="field-heading"><div><h3>What should rank lower?</h3><p>Add a phrase and choose how strongly to penalize it.</p></div></div>
+        <div class="add-penalty">
+          <input id="penaltyPhrase" placeholder="e.g. postdoc" maxlength="80">
+          <select id="penaltyWeight" aria-label="Penalty strength"><option value="8">Slight −8</option><option value="15" selected>Medium −15</option><option value="25">Strong −25</option><option value="40">Hide-like −40</option></select>
+          <button id="addPenalty" aria-label="Add penalty"><svg><use href="#i-plus"></use></svg></button>
+        </div>
+        <div class="suggestions" id="suggestions"></div>
+        <div class="penalty-list" id="penaltyList"></div>
+      </section>
+
+      <section class="score-floor">
+        <div class="field-heading"><div><h3>Minimum match score</h3><p>Hide weaker results without deleting them.</p></div><strong id="scoreFloorValue">0</strong></div>
+        <input id="scoreFloor" type="range" min="0" max="80" step="5" value="0">
+        <div class="range-labels"><span>See everything</span><span>Only strongest</span></div>
+      </section>
+
+      <section class="import-section">
+        <div class="field-heading"><div><h3>Bring your own finds</h3><p>Import a JSON or CSV export into the same ranked feed.</p></div></div>
+        <input id="importFile" type="file" accept=".json,.csv,application/json,text/csv" hidden>
+        <button class="secondary-button full" id="importButton"><svg><use href="#i-upload"></use></svg>Choose JSON or CSV</button>
+        <a class="export-link" href="/api/export.csv"><svg><use href="#i-download"></use></svg>Export all opportunities as CSV</a>
+      </section>
+    </div>
+    <div class="drawer-footer"><button class="text-button" id="cancelPreferences">Cancel</button><button class="primary-button" id="savePreferences">Save & rescore</button></div>
+  </aside>
+
+  <div class="modal-wrap" id="feedbackModal" aria-hidden="true">
+    <div class="modal">
+      <button class="modal-close" id="closeFeedback" aria-label="Close"><svg><use href="#i-x"></use></svg></button>
+      <p class="eyebrow compact">Teach the radar</p>
+      <h2>Why isn't this for you?</h2>
+      <p>Dismiss just this result, or add a phrase that will lower similar opportunities.</p>
+      <div class="feedback-options" id="feedbackOptions"></div>
+      <div class="custom-feedback"><input id="customFeedback" placeholder="A phrase from this role…"><button id="penalizeCustom">Penalize −20</button></div>
+      <button class="dismiss-only" id="dismissOnly">Just dismiss this result</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"><span><svg><use href="#i-check"></use></svg></span><p></p></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
+
