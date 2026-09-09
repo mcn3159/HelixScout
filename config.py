@@ -34,49 +34,31 @@ DATABASE_PATH = ROOT / os.getenv("DATABASE_PATH", "data/opportunities.db")
 PORT = int(os.getenv("PORT", "8787"))
 SCAN_INTERVAL_MINUTES = max(0, int(os.getenv("SCAN_INTERVAL_MINUTES", "0")))
 
-TOPICS = {
-    "microbial genomics": 25,
-    "protein language model": 20,
-    "protein language models": 20,
-    "genomic language model": 20,
-    "genomic language models": 20,
-    "foundation model": 12,
-    "foundation models": 12,
-    "metagenomics": 25,
-    "metagenomic": 25,
-    "protein structure": 15,
-    "structural biology": 12,
-    "computational biology": 20,
-    "gene function": 18,
-    "phylogenetics": 18,
-    "phylogeny": 18,
-    "bioinformatics": 20,
-    "AIxBio": 13,
-    "AI for biology": 13,
-    "AI for life sciences": 13,
-    "AI x Bio": 13,
+# A concept contributes once, regardless of how many aliases a post contains.
+TOPIC_CONCEPTS = {
+    "antibiotic resistance": (25, ("antibiotic resistance", "antimicrobial resistance", "resistome", "resistomes")),
+    "bacterial gene function": (25, ("bacterial gene function", "bacterial genetics", "gene function prediction", "functional annotation")),
+    "biological language models": (25, ("protein language model", "protein language models", "genomic language model", "genomic language models", "DNA language model", "DNA language models", "protein function prediction")),
+    "metagenomics": (25, ("metagenomics", "metagenomic", "microbiome", "microbiomes")),
+    "microbial genomics": (20, ("microbial genomics", "bacterial genomics", "bacterial pathogen", "bacterial pathogens", "pathogen", "pathogens")),
+    "computational biology": (8, ("computational biology",)),
+    "bioinformatics": (8, ("bioinformatics",)),
+    "protein structure": (8, ("protein structure", "structural biology")),
+    "gene function": (8, ("gene function",)),
+    "phylogenetics": (8, ("phylogenetics", "phylogeny")),
+    "AI for biology": (8, ("AIxBio", "AI for biology", "AI for life sciences", "AI x Bio")),
 }
-
+BACTERIAL_CONTEXT = ("bacterial", "bacteria", "microbial", "pathogen", "pathogens")
+BIOLOGICAL_CONTEXT = BACTERIAL_CONTEXT + ("biology", "biological", "protein", "proteins", "genomic", "genomics", "genome", "DNA")
+RECRUITMENT_SIGNALS = ("hiring", "recruiting", "job", "jobs", "position", "positions", "join our team", "applications open", "applications are open", "full-time", "full time", "internship", "internships")
+EVENT_SIGNALS = ("conference", "conferences", "seminar", "seminars", "workshop", "workshops", "symposium", "symposia", "meetup", "meetups", "networking", "happy hour")
+FELLOWSHIP_SIGNALS = ("fellowship", "fellowships", "fellow", "fellows")
+ROLE_SIGNALS = ("scientist", "scientists", "researcher", "researchers", "computational biologist", "bioinformatician", "intern", "postdoc", "post-doc")
 OPPORTUNITY_SIGNALS = {
-    "scientist": 12,
-    "full-time": 15,
-    "full time": 15,
-    "fellowship": 12,
-    "fellow": 15,
-    "conference": 10,
-    "happy hour": 10,
-    "workshop": 12,
-    "seminar": 9,
-    "symposium": 9,
-    "workshop": 7,
-    "hiring": 6,
-    "job": 5,
-    "position": 5,
-    "internship": 15,
-    "intern": 15,
-    "post-doc":7,
-    "postdoc":7,
-    "social":6,
+    **dict.fromkeys(ROLE_SIGNALS, 5),
+    **dict.fromkeys(FELLOWSHIP_SIGNALS, 8),
+    **dict.fromkeys(EVENT_SIGNALS, 12),
+    **dict.fromkeys(RECRUITMENT_SIGNALS, 20),
 }
 
 INDUSTRY_SIGNALS = {
@@ -92,22 +74,49 @@ NYC_SIGNALS = {
     "new york city": 22,
     "new york, ny": 22,
     "nyc": 22,
-    "manhattan": 18,
-    "brooklyn": 18,
-    "queens": 18,
-    "bronx": 18,
-    "new york": 14,
+    "manhattan": 22,
+    "brooklyn": 22,
+    "queens": 22,
+    "bronx": 22,
+    "staten island": 22,
+    "new york": 22,
+    "new jersey": 18,
     "san francisco": 15,
     "south san francisco": 15
+
 }
 
 # Suggestions are shown in the UI but are not active until the user adds them.
 PENALTY_SUGGESTIONS = ["sales","director"]
 
-SEARCH_QUERIES = [
-    '"computational biology" (job OR hiring OR fellowship OR seminar OR conference) (NYC OR "New York" OR "San Francisco" OR "South San Francisco")',
-    '"bioinformatics" (job OR hiring OR fellowship OR seminar OR conference) (NYC OR "New York" OR "San Francisco" OR "South San Francisco")',
-    '(metagenomics OR "microbial genomics") (job OR scientist OR seminar) (NYC OR "New York" OR "San Francisco" OR "South San Francisco")',
-    '("protein language model" OR "foundation model" OR "protein structure") (hiring OR fellowship OR conference) (NYC OR "New York" OR "San Francisco" OR "South San Francisco")',
-]
-
+SEARCH_FAMILIES = {
+    "resistance": ("antibiotic resistance", "antimicrobial resistance", "resistome", "AMR"),
+    "gene_function": ("bacterial genetics", "bacterial pathogens", "bacterial gene function", "gene function prediction", "functional annotation"),
+    "language_models": ("protein language model", "protein language models", "genomic language model", "genomic language models", "DNA language model", "DNA language models", "protein function prediction", "foundation model", "foundation models"),
+    "metagenomics": ("metagenomics", "metagenomic", "microbial genomics", "microbiome"),
+}
+X_TOPIC_QUERIES = {
+    "resistance": '("antibiotic resistance" OR "antimicrobial resistance" OR resistome OR (AMR (bacterial OR microbial)))',
+    "gene_function": '("bacterial genetics" OR "bacterial pathogens" OR "bacterial gene function" OR "gene function prediction" OR "functional annotation")',
+    "language_models": '("protein language model" OR "protein language models" OR "genomic language model" OR "genomic language models" OR "DNA language model" OR "DNA language models" OR "protein function prediction" OR (("foundation model" OR "foundation models") (biology OR protein OR genomic OR bacterial OR DNA)))',
+    "metagenomics": '(metagenomics OR metagenomic OR "microbial genomics" OR microbiome)',
+}
+X_OPPORTUNITY_QUERIES = {
+    "roles": '(hiring OR recruiting OR job OR position OR "join our team" OR "applications open" OR fellowship)',
+    "events": '(conference OR seminar OR workshop OR symposium OR symposia OR meetup OR networking OR "happy hour")',
+}
+X_SEARCH_QUERIES = {
+    f"{family}:{kind}": f"{topic} {opportunity}"
+    for family, topic in X_TOPIC_QUERIES.items()
+    for kind, opportunity in X_OPPORTUNITY_QUERIES.items()
+}
+BLUESKY_SEARCH_QUERIES = {
+    f"{family}:{phrase}": f'"{phrase}"'
+    for family, phrases in SEARCH_FAMILIES.items()
+    for phrase in phrases
+}
+# Retained for local code that previously imported this X-only list.
+SEARCH_QUERIES = list(X_SEARCH_QUERIES.values())
+SEARCH_MAX_PAGES = 2
+BLUESKY_LOOKBACK_DAYS = 30
+BLUESKY_NO_CONTACT_PENALTY = 20

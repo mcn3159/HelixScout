@@ -14,12 +14,15 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Any, Dict, Iterable, List, Optional
 
-from config import SEARCH_QUERIES, env_bool
-from scoring import infer_kind
+from config import (
+    BLUESKY_LOOKBACK_DAYS, BLUESKY_SEARCH_QUERIES, SEARCH_MAX_PAGES,
+    X_SEARCH_QUERIES, env_bool,
+)
+from scoring import has_opportunity_evidence, infer_kind, infer_location, score_opportunity
 
 
 USER_AGENT = "HelixScout/1.0 (local opportunity research tool)"
@@ -68,6 +71,58 @@ def clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", value or ""))).strip()
 
 
+def remember_record(records: Dict[str, Dict[str, Any]], item: Dict[str, Any], query_id: str) -> None:
+    """Deduplicate results while keeping every query that discovered the post."""
+    previous = records.get(item["external_id"], {})
+    queries = list(previous.get("raw", {}).get("matched_queries", []))
+    if query_id not in queries:
+        queries.append(query_id)
+    item["raw"]["matched_queries"] = queries
+    records[item["external_id"]] = item
+
+
+def bluesky_post_links(post: Dict[str, Any]) -> List[str]:
+    """Preserve rich-text and embedded links that need not appear in post text."""
+    record = post.get("record") or {}
+    links = []
+    for facet in record.get("facets", []):
+        for feature in facet.get("features", []):
+            if feature.get("$type") == "app.bsky.richtext.facet#link" and feature.get("uri"):
+                links.append(feature["uri"])
+
+    def embedded_links(embed: Any) -> None:
+        if not isinstance(embed, dict):
+            return
+        if isinstance(embed.get("uri"), str):
+            links.append(embed["uri"])
+        for key in ("external", "record", "media"):
+            embedded_links(embed.get(key))
+
+    embedded_links(record.get("embed"))
+    embedded_links(post.get("embed"))
+    return list(dict.fromkeys(links))
+
+
+def validated_x_query(query: str) -> str:
+    value = f"{query} -is:retweet lang:en"
+    if not query.strip() or len(value) > 512:
+        raise ConnectorError("X query must be nonempty and at most 512 characters including filters")
+    if value.count('"') % 2:
+        raise ConnectorError("X query contains an unclosed quoted phrase")
+    depth = 0
+    quoted = False
+    for char in value:
+        if char == '"':
+            quoted = not quoted
+        elif not quoted:
+            depth += (char == "(") - (char == ")")
+            if depth < 0:
+                raise ConnectorError("X query contains unbalanced parentheses")
+    if depth:
+        raise ConnectorError("X query contains unbalanced parentheses")
+    return value
+
+
 class BlueskyConnector:
     name = "bluesky"
 
@@ -79,56 +134,66 @@ class BlueskyConnector:
         if not self.configured:
             return []
         records: Dict[str, Dict[str, Any]] = {}
-        # Bluesky search does not support X's complete boolean syntax. Send focused phrases.
-        queries = [
-            '"computational biology" NYC', 'metagenomics "New York"',
-            '"microbial genomics" job', '"protein language model" hiring',
-            '"protein structure" seminar NYC', 'bioinformatics fellowship NYC',
-        ]
         api_host = "https://public.api.bsky.app"
         auth_headers: Dict[str, str] = {}
-        public_failed: Optional[Exception] = None
-        for query_index, query in enumerate(queries):
-            params = urllib.parse.urlencode({"q": query, "limit": 40, "sort": "latest"})
-            try:
-                payload = fetch_json(f"{api_host}/xrpc/app.bsky.feed.searchPosts?{params}", headers=auth_headers)
-            except ConnectorError as exc:
-                public_failed = exc
-                identifier = os.getenv("BLUESKY_IDENTIFIER", "").strip()
-                app_password = os.getenv("BLUESKY_APP_PASSWORD", "").strip()
-                if query_index or not identifier or not app_password:
-                    raise
-                session = post_json(
-                    "https://bsky.social/xrpc/com.atproto.server.createSession",
-                    {"identifier": identifier, "password": app_password},
-                )
-                token = session.get("accessJwt")
-                if not token:
-                    raise ConnectorError("Bluesky session did not return an access token") from public_failed
-                api_host = "https://bsky.social"
-                auth_headers = {"Authorization": f"Bearer {token}"}
-                payload = fetch_json(f"{api_host}/xrpc/app.bsky.feed.searchPosts?{params}", headers=auth_headers)
-            for post in payload.get("posts", []):
-                record = post.get("record", {})
-                author = post.get("author", {})
-                text = clean_text(str(record.get("text", "")))
-                uri = str(post.get("uri", ""))
-                rkey = uri.rsplit("/", 1)[-1]
-                handle = author.get("handle", "")
-                url = f"https://bsky.app/profile/{handle}/post/{rkey}" if handle and rkey else "https://bsky.app"
-                records[uri or url] = {
-                    "source": self.name,
-                    "external_id": uri or url,
-                    "kind": infer_kind(text),
-                    "title": summarize_title(text),
-                    "organization": author.get("displayName") or handle,
-                    "author": f"@{handle}" if handle else "",
-                    "location": infer_location(text),
-                    "posted_at": record.get("createdAt") or post.get("indexedAt") or now_iso(),
-                    "url": url,
-                    "description": text,
-                    "raw": {"likeCount": post.get("likeCount", 0), "repostCount": post.get("repostCount", 0)},
-                }
+        since = (datetime.now(timezone.utc) - timedelta(days=BLUESKY_LOOKBACK_DAYS)).isoformat(timespec="seconds")
+        for query_id, query in BLUESKY_SEARCH_QUERIES.items():
+            cursor = None
+            seen_cursors = set()
+            for _ in range(SEARCH_MAX_PAGES):
+                params = {"q": query, "limit": 40, "sort": "latest", "lang": "en", "since": since}
+                if cursor:
+                    params["cursor"] = cursor
+                encoded = urllib.parse.urlencode(params)
+                try:
+                    payload = fetch_json(f"{api_host}/xrpc/app.bsky.feed.searchPosts?{encoded}", headers=auth_headers)
+                except ConnectorError as exc:
+                    identifier = os.getenv("BLUESKY_IDENTIFIER", "").strip()
+                    app_password = os.getenv("BLUESKY_APP_PASSWORD", "").strip()
+                    if auth_headers or not identifier or not app_password:
+                        raise
+                    session = post_json(
+                        "https://bsky.social/xrpc/com.atproto.server.createSession",
+                        {"identifier": identifier, "password": app_password},
+                    )
+                    token = session.get("accessJwt")
+                    if not token:
+                        raise ConnectorError("Bluesky session did not return an access token") from exc
+                    api_host = "https://bsky.social"
+                    auth_headers = {"Authorization": f"Bearer {token}"}
+                    payload = fetch_json(f"{api_host}/xrpc/app.bsky.feed.searchPosts?{encoded}", headers=auth_headers)
+                for post in payload.get("posts", []):
+                    record = post.get("record", {})
+                    author = post.get("author", {})
+                    text = clean_text(str(record.get("text", "")))
+                    # Phrase search is portable; opportunity/context matching is local.
+                    if not has_opportunity_evidence(text) or not score_opportunity({"description": text}, [])[2]:
+                        continue
+                    uri = str(post.get("uri", ""))
+                    if not uri:
+                        continue
+                    rkey = uri.rsplit("/", 1)[-1]
+                    handle = author.get("handle", "")
+                    url = f"https://bsky.app/profile/{handle}/post/{rkey}" if handle and rkey else "https://bsky.app"
+                    item = {
+                        "source": self.name,
+                        "external_id": uri,
+                        "kind": infer_kind(text),
+                        "title": summarize_title(text),
+                        "organization": author.get("displayName") or handle,
+                        "author": f"@{handle}" if handle else "",
+                        "location": infer_location(text),
+                        "posted_at": record.get("createdAt") or post.get("indexedAt") or now_iso(),
+                        "url": url,
+                        "description": text,
+                        "raw": {"likeCount": post.get("likeCount", 0), "repostCount": post.get("repostCount", 0), "post_links": bluesky_post_links(post)},
+                    }
+                    lane = "events" if item["kind"] == "event" else "roles"
+                    remember_record(records, item, f"{query_id}:{lane}")
+                cursor = payload.get("cursor")
+                if not cursor or cursor in seen_cursors:
+                    break
+                seen_cursors.add(cursor)
         return list(records.values())
 
 
@@ -143,41 +208,55 @@ class XConnector:
         token = os.getenv("X_BEARER_TOKEN")
         if not token:
             return []
+        # Validate every query before making any paid requests.
+        queries = {key: validated_x_query(query) for key, query in X_SEARCH_QUERIES.items()}
         records: Dict[str, Dict[str, Any]] = {}
-        for query in SEARCH_QUERIES:
-            # Keep a meaningful margin under the self-serve query length limit.
-            x_query = f"{query} -is:retweet lang:en"[:500]
-            params = urllib.parse.urlencode({
-                "query": x_query,
-                "max_results": 50,
-                "sort_order": "recency",
-                "tweet.fields": "created_at,author_id,entities,public_metrics",
-                "expansions": "author_id",
-                "user.fields": "name,username,location",
-            })
-            payload = fetch_json(
-                f"https://api.x.com/2/tweets/search/recent?{params}",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            users = {user["id"]: user for user in payload.get("includes", {}).get("users", [])}
-            for post in payload.get("data", []):
-                user = users.get(post.get("author_id"), {})
-                text = clean_text(post.get("text", ""))
-                username = user.get("username", "")
-                post_id = str(post.get("id", ""))
-                records[post_id] = {
-                    "source": self.name,
-                    "external_id": post_id,
-                    "kind": infer_kind(text),
-                    "title": summarize_title(text),
-                    "organization": user.get("name") or username,
-                    "author": f"@{username}" if username else "",
-                    "location": infer_location(text) or user.get("location", ""),
-                    "posted_at": post.get("created_at") or now_iso(),
-                    "url": f"https://x.com/{username}/status/{post_id}" if username else f"https://x.com/i/status/{post_id}",
-                    "description": text,
-                    "raw": {"metrics": post.get("public_metrics", {})},
+        for query_id, query in queries.items():
+            next_token = None
+            seen_tokens = set()
+            for _ in range(SEARCH_MAX_PAGES):
+                params = {
+                    "query": query,
+                    "max_results": 50,
+                    "sort_order": "recency",
+                    "tweet.fields": "created_at,author_id,entities,public_metrics,note_tweet",
+                    "expansions": "author_id",
+                    "user.fields": "name,username",
                 }
+                if next_token:
+                    params["next_token"] = next_token
+                payload = fetch_json(
+                    f"https://api.x.com/2/tweets/search/recent?{urllib.parse.urlencode(params)}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                users = {user["id"]: user for user in payload.get("includes", {}).get("users", [])}
+                for post in payload.get("data", []):
+                    user = users.get(post.get("author_id"), {})
+                    # Match the persistence limit so first-scan and later scores
+                    # use the same evidence even for very long posts.
+                    text = clean_text((post.get("note_tweet") or post.get("note_post") or {}).get("text") or post.get("text", ""))[:10000]
+                    username = user.get("username", "")
+                    post_id = str(post.get("id", ""))
+                    if not post_id:
+                        continue
+                    item = {
+                        "source": self.name,
+                        "external_id": post_id,
+                        "kind": infer_kind(text),
+                        "title": summarize_title(text),
+                        "organization": user.get("name") or username,
+                        "author": f"@{username}" if username else "",
+                        "location": infer_location(text),
+                        "posted_at": post.get("created_at") or now_iso(),
+                        "url": f"https://x.com/{username}/status/{post_id}" if username else f"https://x.com/i/status/{post_id}",
+                        "description": text,
+                        "raw": {"metrics": post.get("public_metrics", {})},
+                    }
+                    remember_record(records, item, query_id)
+                next_token = payload.get("meta", {}).get("next_token")
+                if not next_token or next_token in seen_tokens:
+                    break
+                seen_tokens.add(next_token)
         return list(records.values())
 
 
@@ -280,14 +359,6 @@ class LinkedInPublicJobsConnector:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def infer_location(text: str) -> str:
-    value = text.lower()
-    for term in ("New York City", "New York, NY", "NYC", "Manhattan", "Brooklyn", "Queens", "Bronx"):
-        if term.lower() in value:
-            return term
-    return ""
 
 
 def summarize_title(text: str, limit: int = 105) -> str:

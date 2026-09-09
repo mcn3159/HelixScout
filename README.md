@@ -2,7 +2,7 @@
 
 BigMoveFinder is a local-first opportunity radar for computational biology. It scans X, Bluesky, and LinkedIn public job cards, scores results against a focused interest profile, and puts them in a dashboard where negative preferences can be tuned without editing code.
 
-The default profile prioritizes New York City opportunities involving microbial genomics, protein language models, foundation models, metagenomics, protein structure, and computational biology. It recognizes full-time industry roles, scientist positions, fellowships, conferences, and seminars.
+The default profile prioritizes antibiotic resistance, bacterial gene-function prediction, protein/genomic/DNA language models, and metagenomics. It searches broadly for industry roles and scientific networking, then boosts NYC and explicitly remote opportunities.
 
 ## Run it
 
@@ -29,11 +29,25 @@ python3 -m unittest discover -s tests -v
 - **LinkedIn** has no general-purpose public search/read API for this use case. The included adapter reads LinkedIn's public jobs cards slowly, without login or session cookies, and is deliberately isolated because the markup may change. Set `ENABLE_LINKEDIN_PUBLIC=false` to disable it. LinkedIn social posts are not scraped behind login.
 - **Import fallback** accepts JSON or CSV from the dashboard. This is useful for saved LinkedIn results, newsletters, and event lists.
 
-Only public data is collected. The app does not automate login, bypass access controls, or store social-network credentials other than an X API bearer token in your local environment.
+Only public data is collected. The app uses an X bearer token and, when configured, a Bluesky app password from your local environment. It does not bypass access controls.
+
+### Search configuration
+
+Both social platforms read their queries from `config.py`: `X_SEARCH_QUERIES` contains separate role/event queries for each research family; `BLUESKY_SEARCH_QUERIES` contains focused phrases, with opportunity and biological-context matching applied locally. AMR requires bacterial/microbial context, and generic foundation models require biological context in scoring.
+
+X validates complete queries against a 512-character limit, adds English/non-retweet filters, and searches its recent seven-day window. Bluesky requests English posts sorted by latest, with a 30-day `since` window (the service filters by its search timestamp, which can differ from post creation time). Each query retrieves at most two pages: 50 posts/page on X and 40 on Bluesky. Cursors do not guarantee exhaustive coverage. Query identifiers are retained in each result's `raw.matched_queries` metadata; duplicate results merge those identifiers within a scan.
+
+X also requests long-post text through `note_tweet`, up to the existing 10,000-character description storage limit. Recruitment matching checks context around ambiguous words such as `job` and `position`, so enzyme functions, amino-acid positions, and position papers do not automatically receive hiring points. These remain keyword heuristics: event recaps and general fellowship discussions can still appear.
+
+Scanning remains manual by default (`SCAN_INTERVAL_MINUTES=0`). Broad specialist retrieval does not require NYC or remote wording, so posts without locations remain discoverable. Author profile locations are not treated as job locations.
 
 ## Ranking and feedback
 
-Scoring lives in `scoring.py`. Positive evidence is grouped into topics, opportunity types, industry, and NYC proximity. In the Preferences panel, add phrases such as `postdoc`, `unpaid`, `principal`, or `remote only`, assign each a penalty, and save. Every result is rescored immediately. **Not for me** can dismiss an individual result or turn a selected phrase into a reusable penalty.
+Scoring lives in `scoring.py`. Synonyms count once per concept; the four core specialties earn 25 points each, related microbial genomics earns 20, and general methods earn 8, with a 50-point topic cap. Explicit recruitment earns 20, events 12, fellowships 8, and role titles alone 5; only the strongest opportunity signal counts. Industry scoring is retained. NYC earns 22 or explicit remote work 18, without stacking. Posts lacking explicit opportunity evidence are capped at 35 before penalties, except LinkedIn results, which are treated as opportunities based on their source. Plain research posts are filtered from new Bluesky results.
+
+Bluesky posts receive an additional 20-point penalty if they have neither a link nor a contact invitation (for example, “DM me,” “email us,” or “get in touch”). Either is sufficient. Visible URLs, email addresses, rich-text links, and embedded link/quote cards count; the post's own permalink, author mentions, and image attachments alone do not. The weight is `BLUESKY_NO_CONTACT_PENALTY` in `config.py`. This rule applies after score caps and combines with your saved phrase penalties.
+
+In the Preferences panel, add phrases such as `postdoc`, `unpaid`, or `principal`, assign each a penalty, and save. Every result is rescored immediately. **Not for me** can dismiss an individual result or turn a selected phrase into a reusable penalty. App startup also rescores stored records against the current profile, preserving saved/dismissed status and preferences. Existing social-post kinds and old X author-location fallbacks are corrected during rescoring.
 
 Scores are evidence-based heuristics, not model output: expanding a score shows exactly which phrases added or subtracted points.
 

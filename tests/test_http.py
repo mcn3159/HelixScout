@@ -70,10 +70,9 @@ class HttpIntegrationTests(unittest.TestCase):
     def test_static_app_is_served_with_csp(self):
         with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/", timeout=2) as response:
             body = response.read().decode()
-            self.assertIn("Helix Scout", body)
+            self.assertIn("BigMoveFinder", body)
             self.assertIn("Content-Security-Policy", response.headers)
 
 
 if __name__ == "__main__":
     unittest.main()
-

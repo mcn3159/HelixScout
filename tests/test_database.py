@@ -45,7 +45,26 @@ class DatabaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.database.update_status(1, "deleted")
 
+    def test_rescore_preserves_preferences_and_status_and_repairs_social_metadata(self):
+        self.database.upsert_opportunities([
+            {**self.item, "source": "x", "kind": "event", "description": "Join our team hiring in metagenomics", "location": "NYC"},
+            {**self.item, "external_id": "two"},
+        ])
+        rows = self.database.list_opportunities()
+        for item, status in zip(rows, ("saved", "dismissed")):
+            self.database.update_status(item["id"], status)
+        preferences = self.database.save_preferences([
+            {"phrase": "ribosome", "weight": 20}, {"phrase": "powerful", "weight": 20},
+        ], 15)
+        before = {item["id"]: item["status"] for item in self.database.list_opportunities()}
+        self.database.rescore_all()
+        after = self.database.list_opportunities()
+        self.assertEqual(before, {item["id"]: item["status"] for item in after})
+        self.assertEqual(preferences, self.database.get_preferences())
+        social = next(item for item in after if item["source"] == "x")
+        self.assertEqual(social["kind"], "role")
+        self.assertEqual(social["location"], "")
+
 
 if __name__ == "__main__":
     unittest.main()
-

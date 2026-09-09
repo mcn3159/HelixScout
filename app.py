@@ -27,6 +27,7 @@ from seed import seed_if_empty
 STATIC_DIR = ROOT / "static"
 database = Database()
 seed_if_empty(database)
+database.rescore_all()
 scan_lock = threading.Lock()
 
 

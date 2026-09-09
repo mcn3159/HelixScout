@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from config import DATABASE_PATH, PENALTY_SUGGESTIONS
-from scoring import infer_kind, score_opportunity
+from scoring import infer_kind, infer_location, score_opportunity
 
 
 def utc_now() -> str:
@@ -167,10 +167,15 @@ class Database:
         items = self.list_opportunities()
         with self.connect() as connection:
             for item in items:
+                content = f"{item['title']} {item['description']}"
+                if item["source"] in {"x", "bluesky"}:
+                    item["kind"] = infer_kind(content)
+                if item["source"] == "x":
+                    item["location"] = infer_location(content)
                 score, reasons, topics = score_opportunity(item, penalties)
                 connection.execute(
-                    "UPDATE opportunities SET score=?, score_reasons_json=?, topics_json=? WHERE id=?",
-                    (score, json.dumps(reasons), json.dumps(topics), item["id"]),
+                    "UPDATE opportunities SET score=?, score_reasons_json=?, topics_json=?, kind=?, location=? WHERE id=?",
+                    (score, json.dumps(reasons), json.dumps(topics), item["kind"], item["location"], item["id"]),
                 )
 
     def start_scan(self) -> int:
@@ -209,4 +214,3 @@ class Database:
                     FROM opportunities"""
             ).fetchone()
         return {key: (value or 0) for key, value in dict(row).items()}
-
