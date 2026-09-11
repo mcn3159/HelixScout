@@ -62,7 +62,7 @@ function renderAll() {
   renderMetrics();
   renderCards();
   renderDemoNotice();
-  $("#savedNavCount").textContent = state.data.stats.saved || 0;
+  $("#savedNavCount").textContent = dashboardItems().filter(item => item.status === "saved").length;
 }
 
 function renderSources() {
@@ -80,8 +80,15 @@ function renderSources() {
   }).join("");
 }
 
+function dashboardItems() {
+  return state.data.opportunities.filter(item => {
+    if ((item.source === "x" || item.source === "bluesky") && item.score === 0) return false;
+    return !state.hideDemos || !item.is_demo;
+  });
+}
+
 function renderMetrics() {
-  const visibleBase = state.data.opportunities.filter(item => !state.hideDemos || !item.is_demo);
+  const visibleBase = dashboardItems();
   const newItems = visibleBase.filter(item => item.status === "new").length;
   const strong = visibleBase.filter(item => item.status !== "dismissed" && item.score >= 60).length;
   const events = visibleBase.filter(item => item.status !== "dismissed" && item.kind === "event").length;
@@ -94,12 +101,11 @@ function renderMetrics() {
 
 function filteredItems() {
   const minimum = Number(state.data.preferences.min_score || 0);
-  let items = state.data.opportunities.filter(item => {
+  let items = dashboardItems().filter(item => {
     if (item.status === "dismissed") return false;
     if (state.view === "saved" && item.status !== "saved") return false;
     if (state.kind !== "all" && item.kind !== state.kind) return false;
     if (state.source !== "all" && item.source !== state.source) return false;
-    if (state.hideDemos && item.is_demo) return false;
     if (item.score < minimum) return false;
     if (state.query) {
       const haystack = `${item.title} ${item.organization} ${item.description} ${item.location} ${(item.topics || []).join(" ")}`.toLowerCase();
@@ -159,7 +165,7 @@ function cardTemplate(item) {
 }
 
 function renderDemoNotice() {
-  const hasDemo = state.data.opportunities.some(item => item.is_demo);
+  const hasDemo = dashboardItems().some(item => item.is_demo);
   $("#demoNotice").classList.toggle("hidden", !hasDemo || state.hideDemos);
 }
 
