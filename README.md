@@ -1,6 +1,6 @@
-# BigMoveFinder
+# HelixScout
 
-BigMoveFinder is a local-first opportunity radar for computational biology. It scans X, Bluesky, and LinkedIn public job cards, scores results against a focused interest profile, and puts them in a dashboard where negative preferences can be tuned without editing code.
+HelixScout is a local-first opportunity radar for computational biology. It scans X, Bluesky, and LinkedIn public job cards, scores results against a focused interest profile, and puts them in a dashboard where negative preferences can be tuned without editing code.
 
 The default profile prioritizes antibiotic resistance, bacterial gene-function prediction, protein/genomic/DNA language models, and metagenomics. It searches broadly for industry roles and scientific networking, then boosts NYC and explicitly remote opportunities.
 
